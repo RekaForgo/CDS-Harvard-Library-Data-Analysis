@@ -172,11 +172,20 @@ data_grouped <- data_grouped %>%
 
 
 ```{r}
-#create a model to predict number of english / other language books from the ratio of non-resident students
+#log-standardise variables
 
-model <- lm(n ~ non_resident_ratio + language_group, data = data_grouped)
+data_grouped <- data_grouped %>%
+  mutate(log_n = log(n + 1),
+         log_non_resident_ratio = log(non_resident_ratio + 1),
+         log_resident_ratio = log(resident_ratio + 1))
+
+#linear model
+model <- lm(log_n ~ log_non_resident_ratio + log_resident_ratio, data = data_grouped)
 summary(model)
 
 ```
 
+```{r}
+
+```
 
