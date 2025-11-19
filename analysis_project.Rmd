@@ -31,66 +31,68 @@ data <- read.csv("all_data_02.csv")
 
 head(data)
 
-#remove all Nas except for the subtitle column
+data <- read.csv("all_data_02.csv")
+
 
 #rename language column
 colnames(data)[colnames(data) == "languge"] <- "language"
 
 
+#keep only text resources and drop rows with missing essential fields
+
 data_clean <- data %>%
-  filter(!is.na(title) & !is.na(author) & !is.na(publication_date) & !is.na(language) & !is.na(genre) & !is.na(genre) & !is.na(creation_date) & !is.na(resource_type))
+  filter(
+    resource_type == "text",
+    !is.na(title),
+    !is.na(author),
+    !is.na(publication_date),
+    !is.na(language),
+    !is.na(genre),
+    !is.na(creation_date),
+    publication_date != "")
+
+
+
+
+```
+
+```{r}
+#remove "No linguistic content; Not applicable"
 
 data_clean <- data_clean %>%
-  filter(!publication_date == "")%>%
-  filter(resource_type == "text")
+  filter(language != "No linguistic content; Not applicable")
 
+#save csv clean
+write.csv(data_clean, "data_cleaned.csv", row.names = FALSE)
 
-#check data levels in langauge
-
-
-levels = unique(data_clean$language)
-print(levels)
-
-
-
+unique(data_clean$language)
 
 ```
-```{r}
-#remove where "No linguistic content; Not applicable"
 
-data_c <- data_clean %>%
-  filter(!language %in% c("No linguistic content; Not applicable"))
-levels = unique(data_c$language)
-print(levels)
-
-#10 variables
-
-```
 ```{r}
 #count english books
-english_books <- data_c %>%
-  filter(language == "English") %>%
-  nrow()
-print(english_books)
+english_books <- data_clean %>% 
+  filter(language == "English") %>% nrow()
+
+english_books
 
 ```
 
 ```{r}
 #publication date format
 
-data_c$creation_date <- gsub("[^0-9]", "", data_c$creation_date)
+data_clean <- data_clean %>%
+mutate(
+  creation_date = gsub("[^0-9]", "", creation_date),
+  creation_date = ifelse(nchar(creation_date) == 4, creation_date, NA),
+  creation_date = as.integer(creation_date))
 
-data_c <- data_c %>%
-  filter(nchar(creation_date) == 4)
-data_c$creation_date <- as.integer(data_c$creation_date)
 
-#range
-date_range <- range(data_c$creation_date, na.rm = TRUE)
-print(date_range)
+range(data_clean$creation_date, na.rm = TRUE)
 
 #filter for 1980 - 2025
 
-data_c <- data_c %>%
+data_clean <- data_clean %>%
   filter(creation_date >= 1980 & creation_date <= 2025)
 
 ```
@@ -99,123 +101,81 @@ data_c <- data_c %>%
 ```{r}
 #plot number of books in selected languages by publication date
 
-top10_languages = data_c %>%
-  group_by(language) %>%
-  summarise(count = n()) %>%
-  arrange(desc(count)) %>%
+top_languages <- data_clean %>%
+  count(language, sort = TRUE) %>%
   slice_head(n = 11) %>%
   pull(language)
 
-#remove english but filter for top 10 languages
-data_top10 <- data_c %>% filter(language %in% top10_languages & language != "English")
+data_top <- data_clean %>% 
+  filter(language %in% top_languages, language != "English")
 
-ggplot(data_top10, aes(x = as.numeric(creation_date), fill = language)) +
+
+ggplot(data_top, aes(x = creation_date, fill = language)) +
   geom_histogram(binwidth = 10, position = "dodge", color = "black") +
-  labs(title = "Number of Books by Creation Date and Language",
+  labs(title = "Books by Creation Date and Language",
        x = "Creation Date",
-       y = "Number of Books") +
+       y = "Count") +
   theme_minimal()
 
 
 ```
 
 ```{r}
-#plot lines for top 10 languages over time
-data_top10_counts <- data_top10 %>%
-  group_by(creation_date, language) %>%
-  summarise(count = n()) %>%
-  ungroup()
 
-ggplot(data_top10_counts, aes(x = creation_date, y = count, color = language)) +
+data_yearly <- data_clean %>% 
+  count(creation_date, name = "total_books")
+
+data_language_yearly <- data_clean %>%
+  count(creation_date, language, name = "language_books")
+
+```
+
+
+```{r}
+trend_data <- data_language_yearly %>%
+  filter(creation_date >= 2000, creation_date <= 2025, 
+         language %in% top_languages, language != "English")
+
+ggplot(trend_data, aes(x = creation_date, y = language_books, color = language)) +
   geom_line() +
-  labs(title = "Trends in Book Creation by Language (1980-2025)",
+  labs(title = "Trends in Book Creation (2000–2025)",
        x = "Creation Date",
-       y = "Number of Books") +
-  theme_minimal()
-```
-```{r}
-#create a ratio for how many books are enetred in the system that year
-
-data_yearly <- data_c %>%
-  group_by(creation_date) %>%
-  summarise(total_books = n())
-#use this as a baseline for grouping by languages and years and add ratio 0 if no books in the langueg where created
-
-data_language_yearly <- data_c %>%
-  group_by(creation_date, language) %>%
-  summarise(language_books = n()) %>%
-  ungroup()
-
-```
-
-```{r}
-#compare trend sbetween 2010 - 2017 to 2017 -2024 for top 10 languages
-
-
-#filter for years
-data_language_yearly_2010_2024 <- data_language_yearly %>%
-  filter(creation_date >= 2000 & creation_date <= 2025 & language %in% top10_languages & language != "English")
-
-ggplot(data_language_yearly_2010_2024, aes(x = creation_date, y = ratio, color = language)) +
-  geom_smooth(method=lm, se =FALSE) +
-  labs(title = "Trends in Book Creation Ratio by Language (2010-2024)",
-       x = "Creation Date",
-       y = "Ratio of Books Created") +
+       y = "Books per Year") +
   theme_minimal()
 
 ```
+
 ```{r}
-#let's just add up number of all other language books and compare to englihs
-data_c <- data_c %>%
-  mutate(language_group = ifelse(language == "English", "English", "Other Languages"))
+data_grouped <- data_clean %>%
+  mutate(language_group = ifelse(language == "English", "English", "Other")) %>%
+  count(creation_date, language_group) %>%
+  filter(between(creation_date, 2017, 2024))
 
-
-data_language_grouped <- data_c %>%
-  group_by(creation_date, language_group) %>%
-  summarise(language_books = n()) %>%
-  ungroup()
-
-#filter out 2025
-data_language_grouped <- data_language_grouped %>%
-  filter(creation_date < 2025) %>%
-  filter(creation_date >= 2017)
-
-
-ggplot(data_language_grouped, aes(x = creation_date, y = language_books, color = language_group)) +
+ggplot(data_grouped, aes(x = creation_date, y = n, color = language_group)) +
   geom_line() +
-  labs(title = "Trends in Book Creation: English vs Other Languages (1980-2025)",
+  labs(title = "English vs Other Languages (2017–2024)",
        x = "Creation Date",
-       y = "Number of Books") +
+       y = "Books") +
   theme_minimal()
+
 ```
 
+
 ```{r}
-#let's look at genres
-demographics <- read.csv("harvard_demographics.csv")
-head(demographics)
+demographics <- read.csv("harvard_demographics - corrected.csv") %>%
+  mutate(non_resident_ratio = non_resident / total_nr,
+         resident_ratio = (total_nr - non_resident) / total_nr)
 
-#filter from year = 2017 - 2024
-
-demographics <- demographics %>%
-  filter(year >= 2017 & year <= 2024)
-
-#ratio for non-residents compared to total number of students
-
-demographics <- demographics %>%
-  mutate(non_resident_ratio = non_resident / total_nr)
-
-demographics <- demographics %>%
-  mutate(resident_ratio = (total_nr-non_resident) / total_nr)
-
-#add ratios by year to data_language_grouped df
-data_language_grouped <- data_language_grouped %>%
+data_grouped <- data_grouped %>%
   left_join(demographics, by = c("creation_date" = "year"))
-
 ```
+
 
 ```{r}
 #create a model to predict number of english / other language books from the ratio of non-resident students
 
+model <- lm(n ~ non_resident_ratio + language_group, data = data_grouped)
+summary(model)
 
 ```
 
