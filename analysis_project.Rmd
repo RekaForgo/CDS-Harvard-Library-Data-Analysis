@@ -217,4 +217,40 @@ summary(model)
 plot(model)
 
 ```
+```{r}
+
+combined <- data_pooled %>%
+  select(year = creation_date, foreign_share) %>%
+  left_join(
+    demographics %>% select(year, non_resident_ratio),
+    by = "year"
+  ) %>%
+  pivot_longer(
+    cols = c(foreign_share, non_resident_ratio),
+    names_to = "variable",
+    values_to = "value"
+  )
+
+# plot both lines together
+ggplot(combined, aes(x = year, y = value, color = variable)) +
+  geom_line(size = 0.5) +
+  geom_point(size = 1) +
+  scale_color_manual(
+    values = c(
+      foreign_share = "red",
+      non_resident_ratio = "blue"
+    ),
+    labels = c(
+      foreign_share = "Foreign Book Share",
+      non_resident_ratio = "Non-resident Student Ratio"
+    )
+  ) +
+  labs(
+    title = "Foreign Language Book Ratio vs Non-resident Student Ratio",
+    x = "Year",
+    y = "Ratio (0–1)",
+    color = "Variable"
+  ) +
+  theme_minimal()
+```
 
