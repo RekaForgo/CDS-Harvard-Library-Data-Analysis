@@ -172,20 +172,49 @@ data_grouped <- data_grouped %>%
 
 
 ```{r}
-#log-standardise variables
 
-data_grouped <- data_grouped %>%
-  mutate(log_n = log(n + 1),
-         log_non_resident_ratio = log(non_resident_ratio + 1),
-         log_resident_ratio = log(resident_ratio + 1))
+data_yearly <- data_clean %>%
+  count(creation_date, name = "total_books")
 
-#linear model
-model <- lm(log_n ~ log_non_resident_ratio + log_resident_ratio, data = data_grouped)
+# collapse languages into English vs Foreign
+data_pooled <- data_clean %>%
+  mutate(language_group = ifelse(language == "English", "English", "Foreign")) %>%
+  count(creation_date, language_group, name = "books")
+
+# reshape into wide form: English, Foreign per year
+data_pooled <- data_pooled %>%
+  tidyr::pivot_wider(
+    names_from = language_group,
+    values_from = books,
+    values_fill = 0
+  )
+
+# join totals
+data_pooled <- data_pooled %>%
+  left_join(data_yearly, by = "creation_date")
+
+# compute shares
+data_pooled <- data_pooled %>%
+  mutate(
+    english_share = English / total_books,
+    foreign_share = Foreign / total_books
+  )
+
+# join demographics
+data_pooled <- data_pooled %>%
+  filter(creation_date %in% demographics$year) %>%
+  left_join(demographics, by = c("creation_date" = "year"))
+
+model <- lm(foreign_share ~ non_resident_ratio + creation_date, data = data_pooled)
+
 summary(model)
 
 ```
 
 ```{r}
+#check assumptions 1 by 1
+
+plot(model)
 
 ```
 
