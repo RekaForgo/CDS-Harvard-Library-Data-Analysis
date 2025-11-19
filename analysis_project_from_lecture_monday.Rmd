@@ -1,0 +1,400 @@
+---
+title: "Analysis Harvard Library Data"
+author: "Réka Forgó"
+date: "2025-11-12"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(
+  echo = TRUE,          # show code
+  comment = "",         # removes the leading '#'
+  message = FALSE,      # suppress package load messages
+  warning = FALSE,      # suppress warnings
+  fig.align = "center", # center figures
+  fig.width = 7,        # control figure width
+  fig.height = 4     # control figure height
+)
+
+```
+
+```{r}
+# Load necessary libraries
+pacman::p_load(ggplot2, dplyr, tidyr, dslabs, car, pastecs, broom, performance, see)
+
+```
+
+```{r}
+# Load the Harvard library dataset
+data <- read.csv("all_data_02.csv")
+
+
+head(data)
+
+#remove all Nas except for the subtitle column
+
+#rename language column
+colnames(data)[colnames(data) == "languge"] <- "language"
+
+
+data_clean <- data %>%
+  filter(!is.na(title) & !is.na(author) & !is.na(publication_date) & !is.na(language) & !is.na(genre) & !is.na(genre) & !is.na(creation_date) & !is.na(resource_type))
+
+data_clean <- data_clean %>%
+  filter(!publication_date == "")%>%
+  filter(resource_type == "text")
+
+
+#check data levels in langauge
+
+
+levels = unique(data_clean$language)
+print(levels)
+
+
+
+
+```
+```{r}
+#remove where "No linguistic content; Not applicable"
+
+data_c <- data_clean %>%
+  filter(!language %in% c("No linguistic content; Not applicable"))
+levels = unique(data_c$language)
+print(levels)
+
+#10 variables
+
+```
+```{r}
+#count english books
+english_books <- data_c %>%
+  filter(language == "English") %>%
+  nrow()
+print(english_books)
+
+```
+
+```{r}
+#publication date format
+
+data_c$creation_date <- gsub("[^0-9]", "", data_c$creation_date)
+
+data_c <- data_c %>%
+  filter(nchar(creation_date) == 4)
+data_c$creation_date <- as.integer(data_c$creation_date)
+
+#range
+date_range <- range(data_c$creation_date, na.rm = TRUE)
+print(date_range)
+
+#filter for 1980 - 2025
+
+data_c <- data_c %>%
+  filter(creation_date >= 1980 & creation_date <= 2025)
+
+```
+
+
+```{r}
+#plot number of books in selected languages by publication date
+
+top10_languages = data_c %>%
+  group_by(language) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count)) %>%
+  slice_head(n = 11) %>%
+  pull(language)
+
+#remove english but filter for top 10 languages
+data_top10 <- data_c %>% filter(language %in% top10_languages & language != "English")
+
+ggplot(data_top10, aes(x = as.numeric(creation_date), fill = language)) +
+  geom_histogram(binwidth = 10, position = "dodge", color = "black") +
+  labs(title = "Number of Books by Creation Date and Language",
+       x = "Creation Date",
+       y = "Number of Books") +
+  theme_minimal()
+
+
+```
+
+```{r}
+#plot lines for top 10 languages over time
+data_top10_counts <- data_top10 %>%
+  group_by(creation_date, language) %>%
+  summarise(count = n()) %>%
+  ungroup()
+
+ggplot(data_top10_counts, aes(x = creation_date, y = count, color = language)) +
+  geom_line() +
+  labs(title = "Trends in Book Creation by Language (1980-2025)",
+       x = "Creation Date",
+       y = "Number of Books") +
+  theme_minimal()
+```
+```{r}
+#create a ratio for how many books are enetred in the system that year
+
+data_yearly <- data_c %>%
+  group_by(creation_date) %>%
+  summarise(total_books = n())
+#use this as a baseline for grouping by languages and years and add ratio 0 if no books in the langueg where created
+
+data_language_yearly <- data_c %>%
+  group_by(creation_date, language) %>%
+  summarise(language_books = n()) %>%
+  ungroup()
+
+```
+
+```{r}
+all_unique_years <- unique(data_language_yearly$creation_date)
+print(all_unique_years)
+
+ratio_df <- data.frame("year" = all_unique_years, "count_all" = rep(0, length(all_unique_years)), "count_foreign_only"= rep(0, length(all_unique_years)))
+
+for (year in all_unique_years){
+  idx = which(all_unique_years == year)
+  collective_book_number_subset <- data_language_yearly %>%
+  filter(creation_date == year)
+  count <- sum(collective_book_number_subset$language_books)
+  
+  non_english_book_number <- data_language_yearly %>%
+  filter(creation_date == year & language != "English")
+  count2 <- sum(non_english_book_number$language_books)
+  ratio_df$count_all[idx] <- count
+  ratio_df$count_foreign_only[idx] <- count2
+}
+  
+
+```
+```{r}
+ratio_df$ratio <- ratio_df$count_foreign_only/ratio_df$count_all
+```
+
+
+
+```{r}
+#compare trend sbetween 2010 - 2017 to 2017 -2024 for top 10 languages
+
+
+#filter for years
+data_language_yearly_2010_2024 <- data_language_yearly %>%
+  filter(creation_date >= 2000 & creation_date <= 2025 & language %in% top10_languages & language != "English")
+
+ggplot(data_language_yearly_2010_2024, aes(x = creation_date, y = ratio, color = language)) +
+  geom_smooth(method=lm, se =FALSE) +
+  labs(title = "Trends in Book Creation Ratio by Language (2010-2024)",
+       x = "Creation Date",
+       y = "Ratio of Books Created") +
+  theme_minimal()
+
+```
+```{r}
+
+#filter for years
+data_ratio_2006_2024 <- ratio_df %>%
+  filter(year >= 2006 & year <= 2024)
+
+ggplot(ratio_df, aes(x = year, y = ratio)) +
+  geom_point()+
+  labs(title = "Trends in Book Creation Ratio by Language (2010-2024)",
+       x = "Creation Date",
+       y = "Ratio of Books Created") +
+  theme_minimal()
+```
+
+```{r}
+
+```
+
+
+
+```{r}
+#let's just add up number of all other language books and compare to englihs
+data_c <- data_c %>%
+  mutate(language_group = ifelse(language == "English", "English", "Other Languages"))
+
+
+data_language_grouped <- data_c %>%
+  group_by(creation_date, language_group) %>%
+  summarise(language_books = n()) %>%
+  ungroup()
+
+#filter out 2025
+data_language_grouped <- data_language_grouped %>%
+  filter(creation_date < 2025) %>%
+  filter(creation_date >= 2017)
+
+
+ggplot(data_language_grouped, aes(x = creation_date, y = language_books, color = language_group)) +
+  geom_line() +
+  labs(title = "Trends in Book Creation: English vs Other Languages (1980-2025)",
+       x = "Creation Date",
+       y = "Number of Books") +
+  theme_minimal()
+```
+```{r}
+
+```
+
+
+
+```{r}
+#let's look at genres
+demographics <- read.csv("harvard_demographics.csv")
+head(demographics)
+
+#filter from year = 2017 - 2024
+# 
+# demographics <- demographics %>%
+#   filter(year >= 2017 & year <= 2024)
+
+#ratio for non-residents compared to total number of students
+
+demographics <- demographics %>%
+  mutate(non_resident_ratio = non_resident / total_nr)
+
+demographics <- demographics %>%
+  mutate(resident_ratio = (total_nr-non_resident) / total_nr)
+
+#add ratios by year to data_language_grouped df
+data_language_grouped <- data_language_grouped %>%
+  left_join(demographics, by = c("creation_date" = "year"))
+
+```
+```{r}
+demographics$white_US_cit <- demographics$total_nr - (demographics$african_american + demographics$asian_american + demographics$hispanic + demographics$non_resident)
+demographics$white_US_cit_ratio <- demographics$white_US_cit / demographics$total_nr
+demographics$pco_US_cit_ratio <- (demographics$african_american + demographics$asian_american + demographics$hispanic) / demographics$total_nr
+demographics$non_white_US_cit_ratio <- (demographics$african_american + demographics$asian_american + demographics$hispanic + demographics$non_resident) / demographics$total_nr
+
+```
+
+
+
+
+```{r}
+ggplot(demographics, aes(x = non_resident_ratio)) + 
+  geom_histogram(aes(y = ..density..), bins = 15, fill = "#A0E4D1", color = "#36BF98") + 
+  geom_density(color = "#F5005E", size = .7) +
+  labs(title = "Distribution of nonresident student ratio", x = "count", y = "Density")+
+  theme_minimal()
+```
+
+```{r}
+ggplot(data_ratio_2006_2024, aes(x = ratio)) + 
+  geom_histogram(aes(y = ..density..), bins = 15, fill = "#A0E4D1", color = "#36BF98") + 
+  geom_density(color = "#F5005E", size = .7) +
+  labs(title = "Distribution of nonresident student ratio", x = "count", y = "Density")+
+  theme_minimal()
+```
+```{r}
+ggplot(demo_book_joined_all_clean, aes(x = non_white_US_cit_ratio)) + 
+  geom_histogram(aes(y = ..density..), bins = 15, fill = "#A0E4D1", color = "#36BF98") + 
+  geom_density(color = "#F5005E", size = .7) +
+  labs(title = "Distribution of non white resident student ratio", x = "count", y = "Density")+
+  theme_minimal()
+```
+
+
+
+
+```{r}
+# non-residence
+
+ggplot(demographics, aes(sample = non_resident_ratio)) +
+  stat_qq(color = "#36BF98") + 
+  stat_qq_line(color = "#F5005E") +
+  labs(title = "Q-Q Plot: non-resident ratio")+
+  theme_minimal()
+
+# non-english books
+ggplot(data_ratio_2006_2024, aes(sample = ratio)) +
+  stat_qq(color = "#9470FF") + 
+  stat_qq_line(color = "#F5005E") +
+  labs(title = "Q-Q Plot: non-english books ratio")+
+  theme_minimal()
+
+# non-white
+
+ggplot(demo_book_joined_all_clean, aes(sample = non_white_US_cit_ratio)) +
+  stat_qq(color = "#36BF98") + 
+  stat_qq_line(color = "#F5005E") +
+  labs(title = "Q-Q Plot: non-white resident ratio")+
+  theme_minimal()
+
+```
+```{r}
+# nonresident
+shapiro.test(demographics$non_resident_ratio)
+
+# book ratio
+shapiro.test(data_ratio_2006_2024$ratio)
+
+# non white US cit
+shapiro.test(demo_book_joined_all_clean$non_white_US_cit_ratio)
+```
+```{r}
+names(data_ratio_2006_2024)
+print('next')
+names(demographics)
+```
+
+
+```{r}
+demo_book_joined <- data_ratio_2006_2024 %>% 
+  left_join(demographics %>% select(non_resident_ratio, year), by="year")
+```
+
+```{r}
+demo_book_joined_all <- data_ratio_2006_2024 %>% 
+  left_join(demographics, by="year")
+
+demo_book_joined_all_clean <- demo_book_joined_all %>% drop_na()
+```
+
+
+```{r}
+#create a model to predict number of english / other language books from the ratio of non-resident students
+
+model_01 = lm(ratio ~ non_resident_ratio, data=demo_book_joined)
+summary(model_01)
+
+```
+
+```{r}
+# 1. Linearity
+check_model(model_01, check = "linearity")
+
+# 2. Homoscedasticity (constant variance)
+check_model(model_01, check = "homogeneity")
+
+# 3. Normality of residuals
+check_model(model_01, check = "normality")
+
+# 4. Outliers / influential points
+check_model(model_01, check = "outliers")
+```
+
+```{r}
+
+model_02 = lm(ratio ~ non_white_US_cit_ratio, data=demo_book_joined_all_clean)
+summary(model_02)
+```
+```{r}
+# 1. Linearity
+check_model(model_02, check = "linearity")
+
+# 2. Homoscedasticity (constant variance)
+check_model(model_02, check = "homogeneity")
+
+# 3. Normality of residuals
+check_model(model_02, check = "normality")
+
+# 4. Outliers / influential points
+check_model(model_02, check = "outliers")
+```
+
