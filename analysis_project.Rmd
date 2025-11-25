@@ -1,8 +1,10 @@
 ---
 title: "Analysis Harvard Library Data"
-author: "Réka Forgó"
-date: "2025-11-12"
-output: pdf_document
+author: "Reka Forgo"
+date: "2025-11-25"
+output:
+  pdf_document:
+    latex_engine: xelatex
 ---
 
 ```{r setup, include=FALSE}
@@ -17,6 +19,8 @@ knitr::opts_chunk$set(
   fig.height = 4     # control figure height
 )
 
+options(tinytex.verbose = TRUE)
+
 ```
 
 ```{r}
@@ -29,7 +33,7 @@ pacman::p_load(ggplot2, dplyr, tidyr, dslabs, car, pastecs, broom, performance, 
 # Load the Harvard library dataset
 data <- read.csv("all_data_02.csv")
 
-head(data)
+#head(data)
 
 data <- read.csv("all_data_02.csv")
 
@@ -57,7 +61,7 @@ data_clean <- data %>%
 ```
 
 ```{r}
-#remove "No linguistic content; Not applicable"
+#remove "No linguistic content & Not applicable"
 
 data_clean <- data_clean %>%
   filter(language != "No linguistic content; Not applicable")
@@ -65,7 +69,7 @@ data_clean <- data_clean %>%
 #save csv clean
 write.csv(data_clean, "data_cleaned.csv", row.names = FALSE)
 
-unique(data_clean$language)
+#unique(data_clean$language)
 
 ```
 
@@ -133,12 +137,12 @@ data_language_yearly <- data_clean %>%
 
 ```{r}
 trend_data <- data_language_yearly %>%
-  filter(creation_date >= 2000, creation_date <= 2025, 
+  filter(creation_date >= 1980, creation_date <= 2025, 
          language %in% top_languages, language != "English")
 
 ggplot(trend_data, aes(x = creation_date, y = language_books, color = language)) +
   geom_line() +
-  labs(title = "Trends in Book Creation (2000–2025)",
+  labs(title = "Trends in Book Creation (2000-2025)",
        x = "Creation Date",
        y = "Books per Year") +
   theme_minimal()
@@ -149,11 +153,11 @@ ggplot(trend_data, aes(x = creation_date, y = language_books, color = language))
 data_grouped <- data_clean %>%
   mutate(language_group = ifelse(language == "English", "English", "Other")) %>%
   count(creation_date, language_group) %>%
-  filter(between(creation_date, 2017, 2024))
+  filter(between(creation_date, 1980, 2024))
 
 ggplot(data_grouped, aes(x = creation_date, y = n, color = language_group)) +
   geom_line() +
-  labs(title = "English vs Other Languages (2017–2024)",
+  labs(title = "English vs Other Languages (1980-2024)",
        x = "Creation Date",
        y = "Books") +
   theme_minimal()
@@ -248,7 +252,7 @@ ggplot(combined, aes(x = year, y = value, color = variable)) +
   labs(
     title = "Foreign Language Book Ratio vs Non-resident Student Ratio",
     x = "Year",
-    y = "Ratio (0–1)",
+    y = "Ratio (0-1)",
     color = "Variable"
   ) +
   theme_minimal()
